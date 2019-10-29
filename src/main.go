@@ -1,22 +1,18 @@
 package main
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/md5"
-	"crypto/rand"
-	"encoding/hex"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/elasticbeanstalk"
-	"io"
-	"io/ioutil"
 	"log"
-	"os"
 	"time"
+	"encryption"
+	"encoding/json"
+	"os"
+	"io/ioutil"
+	"strings"
 )
 
 // struct for holding key value pair of environment variables
@@ -53,17 +49,6 @@ func checkErr(err error) {
 	}
 }
 
-// func to check AWS env vars
-func checkAWSEnvVar() bool{
-	awsAccessKey := os.Getenv("AWS_ACCESS_KEY_ID")
-	awsSecretKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
-	awsRegion := os.Getenv("AWS_REGION")
-	if awsAccessKey == "" || awsSecretKey == "" || awsRegion == "" {
-		return false
-	}
-	return true
-}
-
 // Func to get config options for the given env and app
 func getEnvConfigSettings(envName *string, appName *string, sess *session.Session) ([]*elasticbeanstalk.ConfigurationSettingsDescription) {
 	svc := elasticbeanstalk.New(sess)
@@ -76,77 +61,38 @@ func getEnvConfigSettings(envName *string, appName *string, sess *session.Sessio
 	return res.ConfigurationSettings
 }
 
-// func to create a random hash
-// https://www.thepolyglotdeveloper.com/2018/02/encrypt-decrypt-data-golang-application-crypto-packages/
-func createHash(key string) string {
-	hasher := md5.New()
-	hasher.Write([]byte(key))
-	return hex.EncodeToString(hasher.Sum(nil))
-}
-
-// Func to encrypt text
-// https://www.thepolyglotdeveloper.com/2018/02/encrypt-decrypt-data-golang-application-crypto-packages/
-func encrypt(data []byte, passphrase string) []byte {
-	block, _ := aes.NewCipher([]byte(createHash(passphrase)))
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		panic(err.Error())
-	}
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
-		panic(err.Error())
-	}
-	ciphertext := gcm.Seal(nonce, nonce, data, nil)
-	return ciphertext
-}
-
-// Func to decrypt text
-// https://www.thepolyglotdeveloper.com/2018/02/encrypt-decrypt-data-golang-application-crypto-packages/
-func decrypt(data []byte, passphrase string) []byte {
-	key := []byte(createHash(passphrase))
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		panic(err.Error())
-	}
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		panic(err.Error())
-	}
-	nonceSize := gcm.NonceSize()
-	nonce, ciphertext := data[:nonceSize], data[nonceSize:]
-	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
-	if err != nil {
-		panic(err.Error())
-	}
-	return plaintext
-}
-
-// func to encrypt data to file
-// https://www.thepolyglotdeveloper.com/2018/02/encrypt-decrypt-data-golang-application-crypto-packages/
-func encryptFile(filename string, data []byte, passphrase string) {
-	f, _ := os.Create(filename)
-	defer f.Close()
-	f.Write(encrypt(data, passphrase))
-}
-
-// func decrypt data from file
-// https://www.thepolyglotdeveloper.com/2018/02/encrypt-decrypt-data-golang-application-crypto-packages/
-func decryptFile(filename string, passphrase string) []byte {
-	data, _ := ioutil.ReadFile(filename)
-	return decrypt(data, passphrase)
-}
-
 // func to generate a random name based on datetime
 func buildFileName() string {
 	return time.Now().Format("20060102150405")
 }
 
+func encryptDataToFile(encryptionMethod encryption.IEncryptionMethod, filename string, data []byte) {
+	f, _ := os.Create(filename)
+	defer f.Close()
+	f.Write(encryptionMethod.EncryptData(data))
+}
+
+func decryptFile(encryptionMethod encryption.IEncryptionMethod, filename string) []byte {
+	data, _ := ioutil.ReadFile(filename)
+	return encryptionMethod.DecryptData(data)
+}
+
 func main() {
 
 	destFile := flag.String("destFile", "", "Path to file where JSON data will be stored, default: \"\"")
+	encryptionMethodName := flag.String("encryptionMethod", "AESCipherEncryption", "Choose between: " + strings.Join(encryption.GetAvailableEncryptionMethodNames(), ","))
 	passPhrase := flag.String("passPhrase", "", "PassPhrase to encrypt file with, default: \"\"")
+	kmsKeyArn := flag.String("kmsKeyArn", "", "Arn to our KMS key")
 	decryptData := flag.Bool("decryptData", false, "Used to decrypt the data fetched from AWS BeanstalkEnvironments, default: false")
+
 	flag.Parse()
+	var encryptionArgs = map[string]string{
+		"passphrase": *passPhrase,
+		"kmsKeyArn": *kmsKeyArn,
+	}
+	encryption.Init()
+	encryptionMethod := encryption.AvailableEncryptionMethods[*encryptionMethodName]
+	encryptionMethod.SetEncryptionArgs(encryptionArgs)
 
 	// make sure destFile is defined in all cases
 	if *destFile == "" && !*decryptData {
@@ -170,12 +116,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// check if AWS credentials are present as environment variables
-	if !checkAWSEnvVar() {
-		log.Fatal("AWS environment variables not defiled")
-		os.Exit(1)
-	}
-
 	// when decrypting, we don't need to perform any other operation
 	if *decryptData {
 		fileName := "./"+buildFileName()+".json"
@@ -184,7 +124,7 @@ func main() {
 			fmt.Println("Can not create temporary file ", fileName)
 			log.Fatal(err)
 		}
-		dataFile.Write(decryptFile(*destFile, *passPhrase))
+		dataFile.Write(decryptFile(encryptionMethod, *destFile))
 		fmt.Println("Decrypted data written to ", fileName)
 		os.Exit(0)
 	}
@@ -235,7 +175,7 @@ func main() {
 	envDetails.EnvironmentDetails = envVariables
 	// creating a json out of the main slice
 	b, _ := json.MarshalIndent(envDetails, "", "    ")
-	// encrypting the json
-	encryptFile(*destFile, b, *passPhrase)
-}
 
+	// encrypting the json
+	encryptDataToFile(encryptionMethod, *destFile, b)
+}
