@@ -1,6 +1,7 @@
 package beanstalk
 
 import (
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/elasticbeanstalk"
 	"utils"
@@ -25,7 +26,7 @@ type AllAppsEnvVars struct {
 
 // Func to get config options for the given env and app
 func getEnvConfigSettings(envName *string, appName *string, sess *session.Session) []*elasticbeanstalk.ConfigurationSettingsDescription {
-	svc := elasticbeanstalk.New(sess)
+	svc := elasticbeanstalk.New(sess, aws.NewConfig())
 	input := &elasticbeanstalk.DescribeConfigurationSettingsInput{
 		ApplicationName: appName,
 		EnvironmentName: envName,
@@ -35,11 +36,12 @@ func getEnvConfigSettings(envName *string, appName *string, sess *session.Sessio
 	return res.ConfigurationSettings
 }
 
-func FetchAllBeanstalkEnvVars() AllAppsEnvVars {
-	// creating a new session which will be used in all AWS API calls
+func FetchAllBeanstalkEnvVars(existingSession *session.Session) AllAppsEnvVars {
 	sess, err := session.NewSession()
 	utils.CheckErr(err)
-	// creating a elasticbeanstalk service object
+	if existingSession != nil {
+		sess = existingSession
+	}
 	svc := elasticbeanstalk.New(sess)
 	// input parameters required when calling describe environments
 	envInput := &elasticbeanstalk.DescribeEnvironmentsInput{}

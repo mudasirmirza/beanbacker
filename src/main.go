@@ -94,7 +94,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	envDetails := beanstalk.FetchAllBeanstalkEnvVars()
+	envDetails := beanstalk.FetchAllBeanstalkEnvVars(nil)
 
 	// creating a json out of the main slice
 	b, _ := json.MarshalIndent(envDetails, "", "    ")
