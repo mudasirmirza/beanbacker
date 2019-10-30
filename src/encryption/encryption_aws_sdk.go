@@ -7,7 +7,7 @@ import (
 )
 
 type KMSEncryption struct {
-	name        string
+	name           string
 	EncryptionArgs map[string]string
 }
 
@@ -24,17 +24,20 @@ func (e KMSEncryption) getKMSClient() *kms.KMS {
 	return kms.New(sess)
 }
 
-func (e KMSEncryption) EncryptData(data []byte) []byte {
-	result, _ := e.getKMSClient().Encrypt(&kms.EncryptInput{
-		KeyId: aws.String(e.EncryptionArgs["kmsKeyArn"]),
-		Plaintext: []byte(e.EncryptionArgs["passphrase"]),
-	})
-	return AESCipherEncryption{EncryptionArgs: map[string]string{"passphrase": string(result.CiphertextBlob)}}.EncryptData(data)
+func (e KMSEncryption) generateDataKey() *kms.GenerateDataKeyOutput {
+	kmsClient := e.getKMSClient()
+	keySpec := "AES_256"
+	dataKey, _ := kmsClient.GenerateDataKey(&kms.GenerateDataKeyInput{KeyId: aws.String(e.EncryptionArgs["kmsKeyArn"]), KeySpec: &keySpec})
+	return dataKey
+}
+
+func (e KMSEncryption) EncryptData(data []byte) EncryptionOutput {
+	dataKey := e.generateDataKey()
+	return EncryptionOutput{EncryptedData: AESCipherEncryption{EncryptionArgs: map[string]string{"passphrase": string(dataKey.Plaintext)}}.EncryptData(data).EncryptedData, EncryptedDataKey: dataKey.CiphertextBlob}
 }
 
 func (e KMSEncryption) DecryptData(data []byte) []byte {
-	result, _ := e.getKMSClient().Decrypt(&kms.DecryptInput{
-		CiphertextBlob: data,
-	})
-	return AESCipherEncryption{EncryptionArgs: map[string]string{"passphrase": string(result.Plaintext)}}.DecryptData(data)
+	kmsClient := e.getKMSClient()
+	dataKey, _ := kmsClient.Decrypt(&kms.DecryptInput{CiphertextBlob: []byte(e.EncryptionArgs["encryptedDataKey"])})
+	return AESCipherEncryption{EncryptionArgs: map[string]string{"passphrase": string(dataKey.Plaintext)}}.DecryptData(data)
 }

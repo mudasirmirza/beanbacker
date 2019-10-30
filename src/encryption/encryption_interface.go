@@ -5,7 +5,7 @@ type IEncryptionMethod interface {
 
 	SetEncryptionArgs(map[string]string)
 
-	EncryptData([]byte) []byte
+	EncryptData([]byte) EncryptionOutput
 
 	DecryptData([]byte) []byte
 }

@@ -7,7 +7,7 @@ func GetAvailableEncryptionMethodNames() []string {
 	for key := range AvailableEncryptionMethods {
 		keys = append(keys, key)
 	}
-	return keys	
+	return keys
 }
 
 func register(encryptionMethod IEncryptionMethod) {

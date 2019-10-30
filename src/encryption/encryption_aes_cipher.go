@@ -10,7 +10,7 @@ import (
 )
 
 type AESCipherEncryption struct {
-	name        string
+	name           string
 	EncryptionArgs map[string]string
 }
 
@@ -32,7 +32,7 @@ func createHash(key string) string {
 
 // Func to encrypt text
 // https://www.thepolyglotdeveloper.com/2018/02/encrypt-decrypt-data-golang-application-crypto-packages/
-func (e AESCipherEncryption) EncryptData(data []byte) []byte {
+func (e AESCipherEncryption) EncryptData(data []byte) EncryptionOutput {
 	passphrase := e.EncryptionArgs["passphrase"]
 	block, _ := aes.NewCipher([]byte(createHash(passphrase)))
 	gcm, err := cipher.NewGCM(block)
@@ -44,7 +44,7 @@ func (e AESCipherEncryption) EncryptData(data []byte) []byte {
 		panic(err.Error())
 	}
 	ciphertext := gcm.Seal(nonce, nonce, data, nil)
-	return ciphertext
+	return EncryptionOutput{EncryptedData: ciphertext}
 }
 
 // Func to decrypt text
