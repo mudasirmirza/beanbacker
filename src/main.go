@@ -23,7 +23,7 @@ func encryptDataToFile(encryptionMethod encryption.IEncryptionMethod, filename s
 	defer dataFile.Close()
 	encryptionOutput := encryptionMethod.EncryptData(data)
 	dataFile.Write(encryptionOutput.EncryptedData)
-	
+
 	dataKeyFile, _ := os.Create(filename + "_dataKey")
 	defer dataFile.Close()
 	dataKeyFile.Write(encryptionOutput.EncryptedDataKey)

@@ -1,6 +1,6 @@
 package encryption
 
 type EncryptionOutput struct {
-	EncryptedData []byte
+	EncryptedData    []byte
 	EncryptedDataKey []byte
 }
