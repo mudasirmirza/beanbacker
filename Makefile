@@ -6,4 +6,4 @@ build:
 
 build_lambda:
 	GOOS=linux go build -o bin/beanbackerLambda src/main_lambda.go
-	zip bin/beanbackerLambda.zip bin/beanbackerLambda
+	zip -f bin/beanbackerLambda.zip bin/beanbackerLambda

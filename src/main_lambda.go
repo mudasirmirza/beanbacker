@@ -46,6 +46,9 @@ func HandleRequest(event BackupEvent) (string, error) {
 	dataKey := base64.StdEncoding.EncodeToString(encryptionOutput.EncryptedDataKey)
 	objectName := "beanstalk_env_vars_backup_" + time.Now().Format("20060102150405") + ".json"
 
+	dataFile.Seek(0, 0)
+	defer dataFile.Close()
+
 	_, err := uploader.Upload(&s3manager.UploadInput{
 		Bucket:   aws.String(event.Bucket),
 		Key:      aws.String(objectName),
